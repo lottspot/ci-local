@@ -1,0 +1,17 @@
+name: Execute CI workflow
+
+on:
+  push:
+    branches: [ builds/ci-environment ]
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  HAB_LICENSE: accept-no-persist
+
+
+jobs:
+  execute-ci-workflow:
+    runs-on: ubuntu-latest
+    steps:
+
+    - run: echo "Hello world!"
