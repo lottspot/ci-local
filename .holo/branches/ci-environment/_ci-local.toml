@@ -1,0 +1,6 @@
+[holomapping]
+root = "ci"
+files = [
+    "**",
+    "!githooks/**"
+]
