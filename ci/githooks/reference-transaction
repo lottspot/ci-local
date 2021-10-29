@@ -1,0 +1,60 @@
+#!/bin/bash
+set -e
+
+test "$1" = 'committed' || exit 0
+
+work_tree=$(git rev-parse --show-toplevel)
+new_tags=()
+
+while read old_oid new_oid ref_name; do
+  if [[ $(git cat-file -t "$new_oid" 2>/dev/null) = tag ]]; then
+    new_tags+=("$ref_name")
+  fi
+done
+
+for tag_ref in "${new_tags[@]}"; do
+
+  tag_name=${tag_ref#refs/tags/}
+
+  if [[ $tag_name =~ ^([^/]+)/(.+)$ ]]; then
+    BUILD_GIT_TAG=$tag_name
+    BUILD_APP=${BASH_REMATCH[1]}
+    BUILD_ID=${BASH_REMATCH[2]}
+  else
+    continue
+  fi
+  
+  # load environment files
+  for envfile in $(git config --get-all "build.${BUILD_APP}.envfile"); do
+
+    # treat relative paths as worktree subpaths
+    if [[ ${envfile:0:1} = / ]]; then
+      envfile_path=$envfile
+    else
+      envfile_path=$work_tree/$envfile
+    fi
+
+    if ! [[ -e $envfile_path ]]; then
+      printf 'error: %s envfile not found: %s\n' "$BUILD_APP" "$envfile_path" >&2
+      exit 1
+    fi
+
+    while read line; do
+      if [[ $line =~ ^([[:alnum:]_]+)=(.*)$ ]] && ! [[ $(declare -p "${BASH_REMATCH[1]}" 2>/dev/null) ]]; then
+        declare -x "$line"
+      else
+        continue
+      fi
+    done < "$envfile_path"
+
+  done
+
+  # prevent workflows from interpreting arguments
+  set --
+
+  # build workflows
+  printf 'reference-transaction: building app %s version %s\n' "$BUILD_APP" "$BUILD_ID"
+  source $work_tree/ci/steps/validate-clean-worktree.sh
+  source $work_tree/ci/workflows/service-build.sh
+
+done
